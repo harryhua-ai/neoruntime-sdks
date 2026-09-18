@@ -1,13 +1,39 @@
 Changelog
 =========
 
-v0.8.0 (unreleased)
+v0.8.0 (2026-09-16)
 -------------------
+
+New Features
+~~~~~~~~~~~~
+
+- **Client-side inference pipeline**: added ``Preprocessor`` / ``PreprocessMeta``, ``YoloV5Postprocessor`` / ``YoloV8Postprocessor``, ``InferencePipeline``, and ``PipelineRunner`` for model-derived preprocessing, source-coordinate mapping, replaceable postprocessing, asynchronous execution, and long-running latest-wins processing with backpressure and statistics
+- **Platform-scheduled pipeline**: added ``StreamPipeline`` / ``StreamPipelineStatus``, combining ``InferenceClient.subscribe()`` with ``OverlayClient`` so inference, filtering, hardware overlay, and application-side result consumption work without bringing pixels into the application process; drop, latency, skew, and error metrics are exposed
+- **Frame-injection output path**: added ``FramePublisher`` and ``CameraClient.push_frame()`` / ``injection_status()`` / ``stop_injection()`` with replace/overlay modes, NV12/RGB publishing, EOS restoration, and session tags; the write-lease-aware pool only reuses slots released by the daemon and falls back to depth-paced rotation on older daemons
+- **Overlay frame sync and observability**: ``OverlayClient`` gained strict frame lock plus ``frame_sequence`` / ``stream_epoch`` / ``session_id`` binding; ``StreamStatus`` gained encoded-publisher, overlay-bake, strict-lock, late-command, and stale-epoch counters
+- **Deployment diagnostics**: added the never-raising ``diagnostics()`` snapshot, requirement-based ``diagnostics.check()`` with aggregated failures, and the application-wide ``set_route_policy()`` acceleration control
+- **Inference model metadata**: ``register_model()`` accepts ``batch_size``, ``ModelInfo`` passes through the server-side batch size, and ``InferenceResult`` exposes the server-computed ``skew_us``
+- **End-to-end device-resident data path**: the DSP router reuses a process-wide client; ``resize_hw`` / ``convert_hw`` can return ``DspBufferRef`` with ``out="ref"``, inference consumes device-side refs directly, NV12 preprocessing can pass them through, and BLEND can target a ``FramePublisher`` pool slot without intermediate read-back or repeated imports
+- **Area-bounded overlay rendering**: added ``render_overlay_fragments()``, splitting strokes into even-sized strips capped to the DSP batch limit to reduce full-frame ARGB overlay bandwidth and memory
+
+Improvements
+~~~~~~~~~~~~
+
+- ``Frame`` crop/resize chains now retain composed geometry metadata; keep-fd frames remain device-side through preprocessing, inference, blending, and publishing, while the media and encoded clients expose additional drop and connection observability
+- Added comprehensive on-device interface and performance suites plus a ``perf_demo`` with subscribe/keep-fd comparison chains, deployment scripts, and runtime metrics collection
+
+Bug Fixes
+~~~~~~~~~
+
+- Fixed three issues found by the on-device interface suite: DSP import ids with the high bit set were parsed as signed 64-bit values; ``get_device_status()`` read a nonexistent ``ir_led_on`` field; and ``AppClient.list_apps()`` constructed the wrong Empty message type
+- Fixed injection shutdown omitting EOS, stop-from-callback attempting to join its own thread, and missing ``ttl_ms`` validation on some overlay publish paths
+- Fixed DSP pools and references remaining usable after client close, retiring process-wide clients closing resources still in flight, and passthrough input refs not being released after inference settled
+- Tightened overlay-fragment even geometry and batch limits, including the pre-edge-slide height rounding that could otherwise produce invalid strips
 
 Deprecated
 ~~~~~~~~~~
 
-- **Plugin system API** (``PluginDiscovery`` / ``PluginServer`` / ``PluginEndpoint``) is deprecated and scheduled for removal in v0.8.0. The platform does not ship the ``/run/aipc/plugins`` discovery mechanism; the SDK keeps the imports working for now, emits a ``DeprecationWarning``, and the docs page has been taken offline. Speak up if you depend on it.
+- **Plugin system API** (``PluginDiscovery`` / ``PluginServer`` / ``PluginEndpoint``) is deprecated. The platform does not ship the ``/run/aipc/plugins`` discovery mechanism; v0.8.0 still keeps the imports working, emits a ``DeprecationWarning``, and leaves the docs page offline. Speak up if you depend on it.
 
 Documentation
 ~~~~~~~~~~~~~
@@ -15,6 +41,7 @@ Documentation
 - Fixed the video-stream examples across docs and README: dropped references to ``MediaClient`` (which never shipped), standardized on ``FdMediaClient``; stream IDs corrected from ``cam0_main`` / ``cam0_sub`` to the device-exposed ``main`` / ``sub``; removed usages of the nonexistent ``get_stream_info()`` / ``get_raw_stream()``; corrected the ``get_encoded_stream()`` return semantics and the flattened ``frame.data`` misuse; added API docs for ``EncodedStreamClient`` / ``EncodedFrame``
 - Fixed missing and misleading imports in the application examples: added ``import time`` to the multi-model example, ``import json`` to the GenAI example; dropped ``from grpc import RpcError`` from the error-handling example (the SDK raises ``RuntimeError``); removed unused ``numpy`` / ``sys`` imports
 - Synced the Chinese inference page with the English one: translated the seven Usage sections that had been English-only since v0.3.0 (segmentation, OCR, CLIP image embeddings, CLIP text encoding, depth estimation, runtime postprocess-config update, GenAI) and added the ``SegmentationMask`` / ``OcrLine`` / ``Embedding`` / ``DepthMap`` data-type entries
+- Added pipeline, frame-injection, overlay, and performance documentation, plus the local-inference application and ``perf_demo`` examples
 
 v0.7.4 (2026-09-08)
 -------------------

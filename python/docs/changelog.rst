@@ -1,13 +1,39 @@
 更新日志
 ========
 
-v0.8.0 (未发布)
+v0.8.0 (2026-09-16)
 -------------------
+
+新增功能
+~~~~~~~~
+
+- **客户端推理管线**：新增 ``Preprocessor`` / ``PreprocessMeta``、``YoloV5Postprocessor`` / ``YoloV8Postprocessor``、``InferencePipeline`` 与 ``PipelineRunner``，支持从模型规格派生预处理、结果坐标映射、可替换后处理、异步执行，以及带最新帧优先背压和统计信息的长驻运行器
+- **平台调度管线**：新增 ``StreamPipeline`` / ``StreamPipelineStatus``，组合 ``InferenceClient.subscribe()`` 与 ``OverlayClient``，在像素不进入应用进程的情况下完成推理、过滤、硬件叠加和应用侧结果消费，并提供丢帧、延迟、时序偏差和错误观测
+- **帧注入输出路径**：新增 ``FramePublisher`` 及 ``CameraClient.push_frame()`` / ``injection_status()`` / ``stop_injection()``，支持 replace / overlay、NV12 / RGB 发布、EOS 恢复与会话标记；写租约感知的缓冲池只复用 daemon 已释放的槽位，兼容旧版 daemon 的深度轮转模式
+- **叠加层帧同步与观测**：``OverlayClient`` 支持严格对帧模式，以及 ``frame_sequence`` / ``stream_epoch`` / ``session_id`` 绑定；``StreamStatus`` 新增编码发布、叠加烘焙、严格锁帧、迟到命令和代数拒绝计数
+- **部署诊断**：新增永不抛错的 ``diagnostics()`` 快照、可按应用要求验收并抛出汇总错误的 ``diagnostics.check()``，以及应用级 ``set_route_policy()`` 加速策略入口
+- **推理模型信息**：``register_model()`` 支持 ``batch_size``，``ModelInfo`` 透传服务端批大小；``InferenceResult`` 新增服务端计算的 ``skew_us``
+- **端到端设备驻留数据链**：DSP 路由器复用进程级客户端；``resize_hw`` / ``convert_hw`` 支持 ``out="ref"`` 返回 ``DspBufferRef``，推理可直接消费设备侧引用，NV12 预处理可直通，BLEND 可直接写入 ``FramePublisher`` 池槽，避免中间读回与重复导入
+- **区域化叠加渲染**：新增 ``render_overlay_fragments()``，把描边拆成受 DSP batch 上限约束的偶数尺寸条带，减少全幅 ARGB 覆盖层的带宽和内存开销
+
+改进
+~~~~
+
+- ``Frame`` 的裁剪 / 缩放链保留组合几何变换元数据；keep-fd 帧在预处理、推理、混合和发布路径中保持设备侧数据，媒体与编码客户端补充丢帧和连接观测
+- 新增完整的设备接口与性能测试套件，以及 ``perf_demo`` 的 subscribe / keep-fd 对照链、部署脚本和运行期指标采集工具
+
+修复
+~~~~
+
+- 修复设备实测发现的三个接口问题：DSP import id 按有符号 64 位解析导致高位 id 失效；``get_device_status()`` 读取不存在的 ``ir_led_on`` 字段；``AppClient.list_apps()`` 构造了错误的 Empty 消息类型
+- 修复注入退出未发送 EOS、回调内停止引发线程自连接，以及部分叠加发布路径遗漏 ``ttl_ms`` 校验
+- 修复 DSP 客户端关闭后池与引用仍可误用、路由器更换进程级客户端时过早关闭在用资源，以及 passthrough 推理完成后输入引用未释放的问题
+- 收紧区域化叠加条带的偶数尺寸和 batch 上限处理，修复边缘平移前高度取整不足导致的无效几何
 
 弃用
 ~~~~
 
-- **插件系统 API** (``PluginDiscovery`` / ``PluginServer`` / ``PluginEndpoint``) 已弃用,计划在 v0.8.0 移除。当前平台未部署 ``/run/aipc/plugins`` 插件发现机制,SDK 暂保留导入兼容并发出 ``DeprecationWarning``,文档页已下线。如有使用需求请提前反馈。
+- **插件系统 API** (``PluginDiscovery`` / ``PluginServer`` / ``PluginEndpoint``) 已弃用。当前平台未部署 ``/run/aipc/plugins`` 插件发现机制；v0.8.0 仍保留导入兼容并发出 ``DeprecationWarning``，文档页已下线。如有使用需求请提前反馈。
 
 文档
 ~~~~
@@ -15,6 +41,7 @@ v0.8.0 (未发布)
 - 修正文档与 README 中的视频流示例:移除对从未存在过的 ``MediaClient`` 的引用,统一改用 ``FdMediaClient``;流 ID 由 ``cam0_main`` / ``cam0_sub`` 修正为设备实际暴露的 ``main`` / ``sub``;移除不存在的 ``get_stream_info()`` / ``get_raw_stream()`` 用法;修正 ``get_encoded_stream()`` 返回值语义与 ``frame.data`` 展平数组误用;补全 ``EncodedStreamClient`` / ``EncodedFrame`` API 文档
 - 修复应用示例中的缺失导入与误导性导入:多模型融合示例补 ``import time``;英文推理页 GenAI 示例补 ``import json``;错误处理示例移除 ``from grpc import RpcError`` (SDK 实际抛出 ``RuntimeError``);清理未使用的 ``numpy`` / ``sys`` 导入
 - 补译中文推理页缺失章节:自 v0.3.0 起仅存在于英文文档的分割 / OCR / CLIP 图像嵌入 / CLIP 文本编码 / 深度估计 / 运行时更新后处理配置 / GenAI 七个使用小节,以及 ``SegmentationMask`` / ``OcrLine`` / ``Embedding`` / ``DepthMap`` 四个数据类型条目,中英文档现已同步
+- 新增管线、帧注入、叠加层与性能说明，补充本地推理应用和 ``perf_demo`` 示例
 
 v0.7.4 (2026-09-08)
 -------------------
