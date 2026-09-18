@@ -72,6 +72,15 @@ Semantics
 - **Daemon-side queue caps at 3, drop-oldest on overflow**: publish
   never backpressures the encoder; overflow surfaces as
   ``injection_status().frames_dropped``.
+- **Write lease (pool slots are never recycled early)**: the daemon
+  reports the buffer ids it may still read (queued + mid-compose) on
+  PushFrame responses and in injection status; the publish family
+  writes only slots confirmed free, waits when the pool is exhausted,
+  and raises an explicit error after ``lease_timeout_s`` (default 5s)
+  instead of silently overwriting live pixels. Default
+  ``pool_depth=4``. Against daemons that do not report the set it
+  falls back to the legacy depth-paced rotation with a one-time
+  warning (see the read-only ``lease_mode`` property).
 - **End = restore**: after ``publish_eos()`` (or ``stop_injection()``)
   the pure ISP path restores at the next IDR — no stream restart.
 - **Lifecycle tag (P2-13)**: ``session_id=`` tags the injection

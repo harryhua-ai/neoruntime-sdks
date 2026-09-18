@@ -101,6 +101,16 @@ Strict frame-lock mode (P1-6)
    # (e.g. main:main). Cross-fed streams (e.g. third:main) keep live
    # preview semantics.
 
+   # Strict mode locks only the platform result layer — app layers
+   # (annotate() drawings) are never excluded: with a locked platform
+   # layer they draw on top of it under their own TTL semantics; on a
+   # SKIP / degraded bake (no platform result to lock this frame) they
+   # draw alone instead of being wiped. Strict never suppresses the
+   # locked platform layer (the frame-sync guarantee is the point of
+   # the mode) and never admits cross-fed platform layers; the frame
+   # ships clean (bake_skips) only when there is neither a locked layer
+   # nor a live app layer.
+
 Combining with inference results (annotate)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -213,6 +223,15 @@ Frame-sync binding (frame_sequence / stream_epoch)
    #   passed are rejected (overlay_late_commands counter).
    #   result.frame_sequence from a subscribe() iteration is the
    #   natural source.
+   #   Note: frame_sequence is the HAL's SHARED frame counter — all
+   #   streams of one media context (main/sub/...) draw from the same
+   #   counter, so sequences ARE comparable across streams. Sourcing
+   #   from another stream's results still adds cross-stream latency
+   #   (inference time lands in counter steps) that can eat into the
+   #   bind window: prefer the target display stream's own subscribe()
+   #   results; cross-stream sources work but show on fewer frames. The
+   #   bind window auto-scales to display-stream frames (each frame
+   #   spans several shared-counter steps on multi-stream devices).
    # stream_epoch: the stream generation counter (readable via
    #   get_stream_status()). Reconfiguration (ReconfigureEncoder /
    #   resolution and full transform reinit) bumps the epoch and purges
@@ -225,7 +244,11 @@ Frame-sync binding (frame_sequence / stream_epoch)
                                stream_epoch=epoch)
 
    # Self-healing after a reconfigure: notice the epoch changed, then
-   # keep publishing with the new one.
+   # keep publishing with the new one. On a reconfigure / pipeline
+   # rebuild the platform bumps the epoch AND drops the stream's
+   # sequence anchor — the HAL counter may restart from small values
+   # in the new generation, so do not reuse a frame_sequence captured
+   # before the rebuild; re-subscribe and bind against fresh numbers.
    status = {s.stream_id: s for s in camera.get_stream_status()}
    epoch = status["main"].stream_epoch
 

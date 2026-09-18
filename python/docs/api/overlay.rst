@@ -95,6 +95,13 @@ OverlayConfig
    # 来自它自己（如 main:main）。交叉喂流的流（如 third:main）保持实时
    # 预览语义
 
+   # 严格模式只锁定平台结果层，不排除应用图层（annotate() 的绘制）：
+   # 有锁定层时，app 图层按自身 TTL 语义叠加绘制在锁定层之上；SKIP /
+   # 降级（本帧没有可锁定的平台结果）时，app 图层单独绘制，不再被
+   # 严格模式清掉。严格模式永不压制已锁定的平台层（帧同步保证正是
+   # 该模式的意义），也绝不放行交叉喂流的平台层；只有"既无锁定层、
+   # 又无在效 app 图层"才干净出帧（计入 bake_skips）
+
 与推理结果联动（annotate）
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -189,6 +196,12 @@ auto-infer 发布的结果）默认也**不会**改变码流——除非运维�
    #   （+2 帧容差）内绘制，过后过期；帧已被流水线越过的指令会被
    #   拒收（overlay_late_commands 计数）。subscribe() 结果里的
    #   result.frame_sequence 就是天然来源
+   #   注意：frame_sequence 是 HAL 的共享帧计数——同一 media context
+   #   下所有流（main/sub/...）共用一个计数器，序号同尺可比；但拿
+   #   别条流的结果当来源会引入跨流延迟（推理耗时落在计数器刻度
+   #   里），可能吃掉绑定窗口。推荐用目标显示流自己 subscribe()
+   #   出的结果做序号来源；跨流来源可用但可见帧数更少。绑定窗口
+   #   按"显示流帧数"自适应换算（多流共享计数器下每帧跨多步）
    # stream_epoch：流代计数（get_stream_status() 可读）。重配置
    #   （ReconfigureEncoder / 分辨率、变换全量重建）会 bump 代数并
    #   清空持有的图层；携带旧代数的事件被拒收（overlay_epoch_rejects
@@ -198,7 +211,10 @@ auto-infer 发布的结果）默认也**不会**改变码流——除非运维�
                                frame_sequence=result.frame_sequence,
                                stream_epoch=epoch)
 
-   # 重配置后的自愈：读到 epoch 变了就换用新值继续发布
+   # 重配置后的自愈：读到 epoch 变了就换用新值继续发布。重配置 /
+   #   流水线重建时平台会 bump 代数并清空该流的序号锚点——HAL 计数
+   #   可能从新纪元的小值重新开始，app 侧不要沿用重建前拿到的旧
+   #   frame_sequence，重新 subscribe() 取新值即可
    status = {s.stream_id: s for s in camera.get_stream_status()}
    epoch = status["main"].stream_epoch
 

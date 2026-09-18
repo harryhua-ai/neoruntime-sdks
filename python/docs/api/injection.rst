@@ -68,6 +68,12 @@ CameraClient 注入 RPC
   零拷贝推理（``infer(frame)``）共用同一套缓冲命名空间。
 - **daemon 侧队列 cap 3、满则丢最旧**：publish 永不反压编码器，
   溢出体现在 ``injection_status().frames_dropped``。
+- **写租约（池槽不被提前复用）**：daemon 在 PushFrame 响应与
+  注入状态里回报"仍在读"的缓冲 id（排队中 + 合成中）；publish 家族
+  只写确认空闲的池槽，池满时等待释放，超过 ``lease_timeout_s``
+  （默认 5s）抛明确错误——不再静默覆写仍在用的像素。默认
+  ``pool_depth=4``。对不回报该集合的旧版 daemon 自动退回旧的
+  深度轮转并告警一次（``lease_mode`` 只读属性可查当前模式）。
 - **结束即恢复**：``publish_eos()``（或 ``stop_injection()``）后，
   纯 ISP 画面从下个 IDR 起恢复，无需重启码流。
 - **生命周期标记（P2-13）**：``session_id=`` 给注入会话打标记——
